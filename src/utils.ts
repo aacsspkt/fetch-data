@@ -2,18 +2,13 @@ import assert from 'assert';
 
 import {
   AnchorProvider,
-  Program,
-  Provider,
   utils,
   Wallet,
 } from '@project-serum/anchor';
 import {
   Connection,
   Keypair,
-  PublicKey,
 } from '@solana/web3.js';
-
-import { IDL } from './staking_idl';
 
 export function getConnection() {
 	const RPC_URL = process.env.RPC_URL;
@@ -39,23 +34,3 @@ export function getProvider(connection: Connection) {
 	return new AnchorProvider(connection, new Wallet(keypair), AnchorProvider.defaultOptions());
 }
 
-export function getProgram(provider: Provider, programId: PublicKey) {
-	return new Program(IDL, programId, provider);
-}
-
-export function deriveStakerPdaAddress(
-	auctionAddress: PublicKey,
-	staker: PublicKey,
-	programId: PublicKey,
-): PublicKey {
-	const [auctionVaultAddress] = PublicKey.findProgramAddressSync(
-		[
-			Buffer.from(utils.bytes.utf8.encode("staker_smash")),
-			staker.toBuffer(),
-			auctionAddress.toBuffer(),
-		],
-		programId,
-	);
-
-	return auctionVaultAddress;
-}
