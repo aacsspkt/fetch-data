@@ -10,6 +10,7 @@ import { PublicKey } from '@solana/web3.js';
 
 import { StakingIdl } from './idl';
 import {
+  chunkArray,
   getConnection,
   getProvider,
 } from './utils';
@@ -41,7 +42,8 @@ export async function fetchStaker() {
 	const provider = getProvider(connection);
 	const program = new Program(StakingIdl, programId, provider);
 
-	const stakerSize = program.account.staker.size;
+	// const stakerSize = program.account.staker.size;
+	const stakerSize = 32;
     console.log("size:", stakerSize);
 
 	const response = await connection.getProgramAccounts(programId, {
@@ -49,69 +51,45 @@ export async function fetchStaker() {
 		commitment: "confirmed",
 	});
 
-	const totalParticipants = response.length;
-	console.log("participants count: %d", totalParticipants);
+	const count = response.length;
+	console.log("participants count: %d", count);
 
-	const promises = response.map(async (item, index) => {
-		console.log("index: %d out of %d", index + 1, totalParticipants);
-		const stakerPda = item.pubkey;
-		const stakerInfo = program.coder.accounts.decode("Staker", item.account.data);
+	const stakerPdas = response.map(r => ({stakerPda: r.pubkey, data: r.account.data}));
 
-		const [{ signature }] = await connection.getConfirmedSignaturesForAddress2(stakerPda, { limit: 1 }, "confirmed");
-		const parsed = await connection.getParsedTransaction(signature, { commitment: "confirmed" });
-		assert(parsed, "Parsed transaction is null");
-		const account = parsed.transaction.message.accountKeys.filter((key) => key.signer);
-		assert(account.length, "There is no signer in transaction");
-		const signer = account[0].pubkey;
-		// console.log("signer %s\n", signer.toString());
+	const participants: {
+		stakerPda: string;
+		staker: string;
+	}[] = []
 
-		return {
-			staker: signer.toString(),
-			stakeAmount: stakerInfo.stakeAmount.toString(),
-			stakerPda: stakerPda.toString(),
-		};
-	});
+	const chunks = chunkArray(stakerPdas, 100);
 
-	// const data = await Promise.all(promises);
+	for (let i = 0; i < chunks.length; i++) {
+		console.log("chunk index: %d out of %d", i + 1, chunks.length)
+		const chunk = chunks[i];
+		const promises = chunk.map(async ({stakerPda, data}) => {
+			// console.log("stakerPda:", stakerPda.toString());
+			// const stakerInfo = program.coder.accounts.decode("Staker", data);
+	
+			const [{ signature }] = await connection.getConfirmedSignaturesForAddress2(stakerPda, { limit: 1 }, "confirmed");
+			const parsed = await connection.getParsedTransaction(signature, { commitment: "confirmed" });
+			assert(parsed, "Parsed transaction is null");
+			const account = parsed.transaction.message.accountKeys.filter((key) => key.signer);
+			assert(account.length, "There is no signer in transaction");
+			const signer = account[0].pubkey;
+			// console.log("signer %s\n", signer.toString());
+	
+			return { staker: signer.toString(), stakerPda: stakerPda.toString() }
+		});
 
-	// const stakerInfos: { staker: string; stakerPda: string; stakeAmount: string }[] = [];
+		const data = await Promise.all(promises);
 
-	// let index = 0;
-	// while (index < response.length) {
-	// 	console.log("index: %d out of %d", index, totalParticipants);
-	// 	const item = response[index];
+		participants.push(...data);
+	}
 
-	// 	const stakerPda = item.pubkey;
-	// 	console.log("stakerPda: %s", stakerPda.toString());
-	// 	const stakerInfo = program.coder.accounts.decode("staker", item.account.data);
-	// 	console.log("stakeAmount: %s", stakerInfo.stakeAmount.toString());
-
-	// 	const [{ signature }] = await connection.getConfirmedSignaturesForAddress2(stakerPda, { limit: 1 });
-	// 	const parsed = await connection.getParsedTransaction(signature, { commitment: "confirmed" });
-	// 	assert(parsed, "Parsed transaction is null");
-	// 	const account = parsed.transaction.message.accountKeys.filter((key) => key.signer);
-	// 	assert(account.length, "There is no signer in transaction");
-	// 	const signer = account[0].pubkey;
-	// 	console.log("staker %s\n", signer.toString());
-
-	// 	stakerInfos.push({
-	// 		staker: signer.toString(),
-	// 		stakeAmount: stakerInfo.stakeAmount.toString(),
-	// 		stakerPda: stakerPda.toString(),
-	// 	});
-	// 	index++;
-	// }
-
-	// fs.writeFileSync(path.resolve(__dirname, "staking-participants.json"), JSON.stringify(data), "utf-8");
-
-	const file = fs.readFileSync(path.resolve(__dirname, "staking-participants.json"), "utf-8");
-
-	const list = JSON.parse(file);
-	assert(Array.isArray(list), "list is not an array");
-
-	const isValid = list.every((item, i, arr) => {
+	const isValid = participants.every((item, i, arr) => {
 		const staker = new PublicKey(item.staker);
 		const derivedPda = deriveStakerPdaAddress(auctionAddress, staker, program.programId);
+		
 		const valid = derivedPda.equals(new PublicKey(item.stakerPda));
 		if (!valid) {
 			console.log("programId", program.programId.toString());
@@ -121,4 +99,6 @@ export async function fetchStaker() {
 		}
 		return valid;
 	});
+
+	fs.writeFileSync(path.resolve(__dirname, "remaining-staking-participants.json"), JSON.stringify(participants), "utf-8");
 }
