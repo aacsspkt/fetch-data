@@ -10,6 +10,7 @@ import { PublicKey } from '@solana/web3.js';
 
 import { WhitelistIdl } from './idl';
 import {
+  chunkArray,
   getConnection,
   getProvider,
 } from './utils';
@@ -21,6 +22,14 @@ export function deriveWhitelistPda(auctionAddress: PublicKey, buyer: PublicKey, 
 	);
 
 	return auctionVaultAddress;
+}
+
+type WhitelistBuyerInfo = {
+	buyer: string;
+	buyerPda: string;
+	participated: boolean;
+	whitelisted: boolean;
+	blacklisted: boolean;
 }
 
 export async function fetchWhitelistBuyer() {
@@ -35,61 +44,62 @@ export async function fetchWhitelistBuyer() {
 	const buyerSize = program.account.buyer.size;
 	console.log("size:", buyerSize);
 
-	// const response = await connection.getProgramAccounts(programId, {
-	// 	filters: [{ dataSize: buyerSize }],
-	// 	commitment: "confirmed",
-	// });
+	const response = await connection.getProgramAccounts(programId, {
+		filters: [{ dataSize: buyerSize }],
+		commitment: "confirmed",
+	});
 
-	// const totalPdas = response.length;
-	// console.log("totalPdas count: %d", totalPdas);
-	// const whiteListPdas = response.map((r) => ({ whitelistPda: r.pubkey, data: r.account.data }));
+	const totalPdas = response.length;
+	console.log("totalPdas count: %d", totalPdas);
+	const whiteListPdas = response.map((r) => ({ whitelistPda: r.pubkey, data: r.account.data }));
 
-	// const whitelisted: {
-	// 	whitelistPda: string;
-	// 	whitelistUser: string;
-	// }[] = [];
+	const whitelisted: WhitelistBuyerInfo[] = [];
 
-	// const chunks = chunkArray(whiteListPdas, 100);
+	const chunks = chunkArray(whiteListPdas, 100);
 
-	// for (let i = 0; i < chunks.length; i++) {
-	// 	console.log("chunk index: %d out of %d", i + 1, chunks.length);
-	// 	const chunk = chunks[i];
-	// 	const promises = chunk.map(async ({ whitelistPda, data }) => {
-	// 		// const buyerInfo = program.coder.accounts.decode("Buyer", item.data);
-	// 		const signatureInfos = await connection.getConfirmedSignaturesForAddress2(whitelistPda);
-	// 		const signatures = signatureInfos.map((info) => info.signature);
-	// 		const parsedtxns = await connection.getParsedTransactions(signatures, { commitment: "confirmed" });
-	// 		const [signer] = parsedtxns.map((parsed) => {
-	// 			assert(parsed, "Parsed transaction is null");
-	// 			const account = parsed.transaction.message.accountKeys.filter((key) => key.signer);
-	// 			assert(account.length, "There is no signer in transaction");
-	// 			const signer = account[0].pubkey;
-	// 			return signer;
-	// 		}).filter((s) => !s.equals(auctionCreator));
+	for (let i = 0; i < chunks.length; i++) {
+		// console.log("chunk index: %d out of %d", i + 1, chunks.length);
+		const chunk = chunks[i];
+		const promises = chunk.map(async ({ whitelistPda, data }) => {
+			const decoded = program.coder.accounts.decode("Buyer", data);
+			const signatureInfos = await connection.getConfirmedSignaturesForAddress2(whitelistPda);
+			const signatures = signatureInfos.map((info) => info.signature);
+			const parsedtxns = await connection.getParsedTransactions(signatures, { commitment: "confirmed" });
+			const [signer] = parsedtxns.map((parsed) => {
+				assert(parsed, "Parsed transaction is null");
+				const account = parsed.transaction.message.accountKeys.filter((key) => key.signer);
+				assert(account.length, "There is no signer in transaction");
+				const signer = account[0].pubkey;
+				return signer;
+			}).filter((s) => !s.equals(auctionCreator));
 
-	// 		return {
-	// 			whitelistUser: signer?.toString(),
-	// 			whitelistPda: whitelistPda.toString(),
-	// 		};
-	// 	});
+			const buyerInfo: WhitelistBuyerInfo = {
+				blacklisted: decoded.blacklisted,
+				buyer: signer ? signer.toString() : PublicKey.default.toString(),
+				buyerPda: whitelistPda.toString(),
+				participated: decoded.participated,
+				whitelisted: decoded.whitelisted
+			}
+			return buyerInfo;
+		});
 
-	// 	const data = await Promise.all(promises);
+		const data = await Promise.all(promises);
 
-	// 	whitelisted.push(...data);
-	// }
+		whitelisted.push(...data);
+	}
 
-	// fs.writeFileSync(path.resolve(__dirname, "whitelist-whitelisted.json"), JSON.stringify(whitelisted), "utf-8");
+	fs.writeFileSync(path.resolve(__dirname, "output", "whitelist-whitelisted.json"), JSON.stringify(whitelisted), "utf-8");
 
-	const file = fs.readFileSync(path.resolve(__dirname, "whitelisted.json"), "utf-8");
-	const list = JSON.parse(file);
-	assert(Array.isArray(list));
+	// const file = fs.readFileSync(path.resolve(__dirname, "whitelisted.json"), "utf-8");
+	// const list = JSON.parse(file);
+	// assert(Array.isArray(list));
 
-	const unparticipated = list.filter((i: any) => !Object.keys(i).includes("whitelistUser"))
-	console.log("unparticipated count: %d", unparticipated.length);
+	// const unparticipated = list.filter((i: any) => !Object.keys(i).includes("whitelistUser"))
+	// console.log("unparticipated count: %d", unparticipated.length);
 
-	fs.writeFileSync(path.resolve(__dirname, "whitelist-unparticipated.json"), JSON.stringify(unparticipated), "utf-8");
+	// fs.writeFileSync(path.resolve(__dirname, "whitelist-unparticipated.json"), JSON.stringify(unparticipated), "utf-8");
 
-	const participated = list.filter((item: any) => Object.keys(item).includes("whitelistUser"));
-	console.log("participated count: %d", participated.length);
-	fs.writeFileSync(path.resolve(__dirname, "whitelist-participants.json"), JSON.stringify(participated), "utf-8");
+	// const participated = list.filter((item: any) => Object.keys(item).includes("whitelistUser"));
+	// console.log("participated count: %d", participated.length);
+	// fs.writeFileSync(path.resolve(__dirname, "whitelist-participants.json"), JSON.stringify(participated), "utf-8");
 }

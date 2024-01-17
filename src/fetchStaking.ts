@@ -42,8 +42,8 @@ export async function fetchStaker() {
 	const provider = getProvider(connection);
 	const program = new Program(StakingIdl, programId, provider);
 
-	// const stakerSize = program.account.staker.size;
-	const stakerSize = 32;
+	const stakerSize = program.account.staker.size;
+	// const stakerSize = 32;
     console.log("size:", stakerSize);
 
 	const response = await connection.getProgramAccounts(programId, {
@@ -100,5 +100,5 @@ export async function fetchStaker() {
 		return valid;
 	});
 
-	fs.writeFileSync(path.resolve(__dirname, "remaining-staking-participants.json"), JSON.stringify(participants), "utf-8");
+	fs.writeFileSync(path.resolve(__dirname, "output", "staking-participants.json"), JSON.stringify(participants), "utf-8");
 }

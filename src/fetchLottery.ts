@@ -10,6 +10,15 @@ import {
   getProvider,
 } from './utils';
 
+type BuyerInfo = {
+	buyer: string;
+	buyerPda: string;
+	participatedWith: "sol" | "token" | "none";
+	claimed: boolean;
+	isWinner: boolean;
+	isBlacklisted: boolean;
+}
+
 export async function fetchLotterBuyer() {
 	const connection = getConnection();
 	const provider = getProvider(connection);
@@ -32,13 +41,21 @@ export async function fetchLotterBuyer() {
 	console.log("participants count: %d", totalParticipants);
 
   const buyerInfos = response.map((item, index) => {
-		console.log("index: %d out of %d", index + 1, totalParticipants);
+		// console.log("index: %d out of %d", index + 1, totalParticipants);
 		const buyerPda = item.pubkey;
-		const buyerInfo = program.coder.accounts.decode("Buyer", item.account.data);
-		// console.log({buyerInfo});
+		const decoded = program.coder.accounts.decode("Buyer", item.account.data);
+		// console.log({decoded});
+		const buyerInfo: BuyerInfo = {
+			buyer: decoded.buyerAddress.toString(),
+			buyerPda: buyerPda.toString(),
+			claimed: decoded.claimed,
+			participatedWith: decoded.claimSol ? "sol" : decoded.claimToken ? "token" : "none",
+			isBlacklisted: decoded.blacklisted,
+			isWinner: decoded.winner
+		}
 
-		return { buyers: buyerInfo.buyerAddress.toString(), buyerPda: buyerPda.toString() };
+		return buyerInfo;
 	});
 
-  fs.writeFileSync(path.resolve(__dirname, "lottery-participants.json"), JSON.stringify(buyerInfos), "utf-8");
+  fs.writeFileSync(path.resolve(__dirname, "output", "lottery-participants.json"), JSON.stringify(buyerInfos), "utf-8");
 }

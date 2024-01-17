@@ -18,28 +18,25 @@ export async function createExcelOrCsv(jsonData: any[], outputFilePath: string, 
 	console.log(`Conversion from JSON to ${fileType.toUpperCase()} successful!`);
 }
 
-
-
 export function jsonToXlsx() {
-  const lotteyFile = fs.readFileSync(path.resolve(__dirname, "lottery-participants.json"), "utf-8");
-  const stakingFile = fs.readFileSync(path.resolve(__dirname, "staking-participants.json"), "utf-8");
-  const whitelistFile = fs.readFileSync(path.resolve(__dirname, "whitelist-participants.json"), "utf-8");
+	const lotteyFile = fs.readFileSync(path.resolve(__dirname, "output", "lottery-participants.json"), "utf-8");
+	// const stakingFile = fs.readFileSync(path.resolve(__dirname, "output", "staking-participants.json"), "utf-8");
+	const whitelistFile = fs.readFileSync(path.resolve(__dirname, "output", "whitelist-participants.json"), "utf-8");
 
-  const lotteryInfo = JSON.parse(lotteyFile);
-  const stakerInfo = JSON.parse(stakingFile);
-  const whitelistInfo = JSON.parse(whitelistFile);
+	const lotteryInfo = JSON.parse(lotteyFile);
+	// const stakerInfo = JSON.parse(stakingFile);
+	const whitelistInfo = JSON.parse(whitelistFile);
 
-  assert(Array.isArray(lotteryInfo));
-  assert(Array.isArray(stakerInfo));
-  assert(Array.isArray(whitelistInfo));
+	assert(Array.isArray(lotteryInfo));
+	// assert(Array.isArray(stakerInfo));
+	assert(Array.isArray(whitelistInfo));
 
-  const lotteryParticipants = lotteryInfo.map(info => ({buyer: info.buyers}));
-  createExcelOrCsv(lotteryParticipants, path.resolve(__dirname, 'lotteryParticipants.xlsx'), "xlsx");
+	const lotteryParticipants = lotteryInfo.map((info) => info);
+	createExcelOrCsv(lotteryParticipants, path.resolve(__dirname, "output", "lotteryParticipants.csv"), "csv");
 
-  const stakingParticipants = stakerInfo.map(info => ({staker: info.staker}));
-  createExcelOrCsv(stakingParticipants, path.resolve(__dirname, 'stakingParticipants.xlsx'), "xlsx");
+	// const stakingParticipants = stakerInfo.map(info => ({staker: info.staker}));
+	// createExcelOrCsv(stakingParticipants, path.resolve(__dirname, "output", "stakingParticipants.csv"), "xlsx");
 
-  const whitelistParticipants = whitelistInfo.map(info => ({buyer: info.whitelistUser}));
-  createExcelOrCsv(whitelistParticipants, path.resolve(__dirname, 'whitelistParticipants.xlsx'), "xlsx");
-  
+	const whitelistParticipants = whitelistInfo.map((info) => info);
+	createExcelOrCsv(whitelistParticipants, path.resolve(__dirname, "output", "whitelistParticipants.csv"), "csv");
 }
